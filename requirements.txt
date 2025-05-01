@@ -9,4 +9,3 @@ flask
 gunicorn
 firebase-admin
 requests
-flask-cors
