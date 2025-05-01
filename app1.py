@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify
-from flask_cors import CORS
+from flask_cors import CORS  # Add CORS for Dialogflow requests
 import firebase_admin
 from firebase_admin import credentials, db
 import traceback
@@ -7,7 +7,7 @@ import os
 import json
 
 app = Flask(__name__)
-CORS(app)
+CORS(app)  # Enable CORS for Dialogflow requests
 
 # Initialize Firebase Realtime Database
 try:
