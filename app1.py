@@ -1,21 +1,29 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 import firebase_admin
 from firebase_admin import credentials, db
 import traceback
 import os
+import json
 
 app = Flask(__name__)
+CORS(app)
 
 # Initialize Firebase Realtime Database
 try:
-    cred = credentials.Certificate('projet-fin-d-etude-4632f-firebase-adminsdk-fbsvc-0acc78a72e.json')
+    firebase_credentials = os.getenv("FIREBASE_CREDENTIALS")
+    if not firebase_credentials:
+        raise ValueError("FIREBASE_CREDENTIALS environment variable not set")
+
+    cred_dict = json.loads(firebase_credentials)
+    cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred, {
         'databaseURL': 'https://projet-fin-d-etude-4632f-default-rtdb.firebaseio.com/'
     })
     db_ref = db.reference('sensor_data')
     print("Firebase Realtime Database initialized successfully.")
 except Exception as e:
-    print(f"Failed to initialize Realtime Database: {str(e)}")
+    print(f"Failed to initialize Firebase: {str(e)}")
     db_ref = None
 
 # CO danger threshold (in ppm)
