@@ -4,13 +4,19 @@ import firebase_admin
 from firebase_admin import credentials, db
 import traceback
 import os
+import json
 
 app = Flask(__name__)
 CORS(app)
 
-# Initialisation de Firebase avec un fichier local
+# Initialize Firebase Realtime Database
 try:
-    cred = credentials.Certificate("projet-fin-d-etude-4632f-4cb0effa360e.json")  # Ton fichier JSON ici
+    firebase_credentials = os.getenv("FIREBASE_CREDENTIALS")
+    if not firebase_credentials:
+        raise ValueError("FIREBASE_CREDENTIALS environment variable not set")
+
+    cred_dict = json.loads(firebase_credentials)
+    cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred, {
         'databaseURL': 'https://projet-fin-d-etude-4632f-default-rtdb.firebaseio.com/'
     })
@@ -20,7 +26,7 @@ except Exception as e:
     print(f"Failed to initialize Firebase: {str(e)}")
     db_ref = None
 
-# Seuil de danger pour le CO
+# CO danger threshold (in ppm)
 CO_DANGER_THRESHOLD = 400
 
 @app.route('/')
@@ -41,6 +47,7 @@ def process_command():
         print(f"Failed to parse JSON: {str(e)}")
         return jsonify({'fulfillmentText': f"Erreur: Impossible de parser le JSON: {str(e)}"}), 400
 
+    # Check if queryResult and intent are present
     if 'queryResult' not in data or 'intent' not in data['queryResult']:
         print("Missing queryResult or intent in request body.")
         return jsonify({'fulfillmentText': "Erreur: Requête mal formée, queryResult ou intent manquant."}), 400
@@ -48,30 +55,51 @@ def process_command():
     intent = data['queryResult']['intent']['displayName']
     print(f"Processing intent: {intent}")
 
+    # Handle Default Welcome Intent
     if intent == 'Default_Welcome_Intent':
         response = "Bonjour ! Je suis ici pour vous aider à surveiller les niveaux de CO. Posez-moi une question comme 'Quel est le niveau de CO ?' ou 'Est-ce dangereux ?'."
-        return jsonify({'fulfillmentText': response}), 200
+        print(f"Returning response: {response}")
+        return jsonify({
+            'fulfillmentText': response
+        }), 200
 
+    # For other intents, proceed with Firebase data fetching
     if db_ref is None:
         print("Realtime Database not initialized.")
         return jsonify({'fulfillmentText': "Erreur: Base de données non initialisée."}), 500
 
     try:
+        # Fetch all sensor data entries
         sensor_data_entries = db_ref.get()
         if not sensor_data_entries:
-            return jsonify({'fulfillmentText': "Désolé, je n'ai pas pu récupérer les données des capteurs."}), 200
+            print("No data found at 'sensor_data' path.")
+            return jsonify({
+                'fulfillmentText': "Désolé, je n'ai pas pu récupérer les données des capteurs."
+            }), 200
 
+        print(f"Retrieved sensor data: {sensor_data_entries}")
+
+        # Convert to a list of entries with timestamps
         entries = []
         for key, value in sensor_data_entries.items():
-            if isinstance(value, dict) and 'mq5' in value and 'mq7' in value:
+            if not isinstance(value, dict):
+                print(f"Skipping entry {key}: value is not a dictionary")
+                continue
+            if 'mq5' in value and 'mq7' in value:
                 value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
                 entries.append({'key': key, 'data': value})
+            else:
+                print(f"Skipping entry {key}: missing required fields (mq5 or mq7)")
 
         if not entries:
-            return jsonify({'fulfillmentText': "Désolé, je n'ai pas pu récupérer les données des capteurs."}), 200
+            print("No valid entries found with required fields.")
+            return jsonify({
+                'fulfillmentText': "Désolé, je n'ai pas pu récupérer les données des capteurs."
+            }), 200
 
         entries.sort(key=lambda x: x['data']['timestamp'], reverse=True)
         sensor_data = entries[0]['data']
+        print(f"Latest sensor data: {sensor_data}")
     except Exception as e:
         print(f"Failed to fetch data from Realtime Database: {str(e)}")
         print(traceback.format_exc())
@@ -90,7 +118,10 @@ def process_command():
     else:
         response = "Désolé, je n'ai pas compris votre demande."
 
-    return jsonify({'fulfillmentText': response}), 200
+    print(f"Returning response: {response}")
+    return jsonify({
+        'fulfillmentText': response
+    }), 200
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
