@@ -10,9 +10,3 @@ gunicorn
 firebase-admin
 requests
 flask_cors
-flask
-gunicorn
-scikit-learn
-joblib
-numpy
-flask-cors

@@ -56,7 +56,7 @@ def process_command():
     print(f"Processing intent: {intent}")
 
     # Handle Default Welcome Intent
-    if intent == 'Default Welcome Intent':
+    if intent == 'Default_Welcome_Intent':
         response = "Bonjour ! Je suis ici pour vous aider à surveiller les niveaux de CO. Posez-moi une question comme 'Quel est le niveau de CO ?' ou 'Est-ce dangereux ?'."
         print(f"Returning response: {response}")
         return jsonify({
