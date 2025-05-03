@@ -5,6 +5,7 @@ from firebase_admin import credentials, db
 import traceback
 import os
 import json
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -20,7 +21,7 @@ try:
     firebase_admin.initialize_app(cred, {
         'databaseURL': 'https://projet-fin-d-etude-4632f-default-rtdb.firebaseio.com/'
     })
-    db_ref = db.reference('sensor_data')
+    db_ref = db.reference('sensor_data')  # Using 'sensor_data' path
     print("Firebase Realtime Database initialized successfully.")
 except Exception as e:
     print(f"Failed to initialize Firebase: {str(e)}")
@@ -57,6 +58,7 @@ def process_command():
 
     # Handle Default Welcome Intent
     if intent == 'Default Welcome Intent':
+        
         print(f"Returning response: {response}")
         return jsonify({
             'fulfillmentText': response
@@ -85,7 +87,13 @@ def process_command():
                 print(f"Skipping entry {key}: value is not a dictionary")
                 continue
             if 'mq5' in value and 'mq7' in value:
-                value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
+                timestamp = value.get('timestamp')
+                if timestamp is None:
+                    print(f"Entry {key} has no timestamp, assigning current time")
+                    timestamp = datetime.utcnow().isoformat() + 'Z'
+                elif isinstance(timestamp, dict) and 'seconds' in timestamp:
+                    timestamp = datetime.utcfromtimestamp(timestamp['seconds']).isoformat() + 'Z'
+                value['timestamp'] = timestamp
                 entries.append({'key': key, 'data': value})
             else:
                 print(f"Skipping entry {key}: missing required fields (mq5 or mq7)")
@@ -97,6 +105,10 @@ def process_command():
             }), 200
 
         entries.sort(key=lambda x: x['data']['timestamp'], reverse=True)
+        print(f"Total entries found: {len(entries)}")
+        for i, entry in enumerate(entries):
+            print(f"Entry {i}: Timestamp = {entry['data']['timestamp']}, MQ7 = {entry['data'].get('mq7')}")
+
         sensor_data = entries[0]['data']
         print(f"Latest sensor data: {sensor_data}")
     except Exception as e:
