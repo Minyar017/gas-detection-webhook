@@ -3,8 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class AlertService {
-  static const String _baseUrl =
-      'https://alert-u1o7.onrender.com/predict'; // Use Render-hosted API
+  static const String _baseUrl = 'https://alert-u1o7.onrender.com/predict'; // Use Render-hosted API
   static const int _timeoutSeconds = 15;
   static const int _maxRetries = 3;
   static const Duration _retryDelay = Duration(seconds: 2);
@@ -14,12 +13,7 @@ class AlertService {
   double? _lastMq5;
   double? _lastMq7;
 
-  bool _hasChanged(
-    double temperature,
-    double humidity,
-    double mq5,
-    double mq7,
-  ) {
+  bool _hasChanged(double temperature, double humidity, double mq5, double mq7) {
     return temperature != _lastTemperature ||
         humidity != _lastHumidity ||
         mq5 != _lastMq5 ||
@@ -33,25 +27,15 @@ class AlertService {
     double mq7,
   ) async {
     if (!_hasChanged(temperature, humidity, mq5, mq7)) {
-      print("No change in values. Skipping request.");
-      return {
-        'alerts': [],
-        'danger': false,
-        'prediction': 0,
-        'alert_pred': 0,
-        'suspected_gas': 'None',
-        'mq5_pred': mq5,
-        'mq7_pred': mq7,
-      };
+      return {'alerts': [], 'danger': false, 'suspected_gas': 'Unknown'}; // Pas de changement, pas de nouvelle requête
     }
 
-    int attempt = 0;
-    while (attempt < _maxRetries) {
+    int retryCount = 0;
+    while (retryCount < _maxRetries) {
       try {
         print(
-          "Attempt ${attempt + 1}: Sending request to Flask: temp=$temperature, humidity=$humidity, mq5=$mq5, mq7=$mq7",
+          "Sending request to Flask (Attempt $retryCount): temp=$temperature, humidity=$humidity, mq5=$mq5, mq7=$mq7",
         );
-
         final response = await http
             .post(
               Uri.parse(_baseUrl),
@@ -63,52 +47,42 @@ class AlertService {
                 'mq7': mq7,
               }),
             )
-            .timeout(const Duration(seconds: _timeoutSeconds));
-
-        print("Response status: ${response.statusCode}");
-        print("Response body: ${response.body}");
+            .timeout(Duration(seconds: _timeoutSeconds));
 
         if (response.statusCode == 200) {
-          _lastTemperature = temperature;
-          _lastHumidity = humidity;
-          _lastMq5 = mq5;
-          _lastMq7 = mq7;
-          final responseData = jsonDecode(response.body);
-          print(
-            "Parsed response - alerts: ${responseData['alerts']}, danger: ${responseData['danger']}, suspected_gas: ${responseData['suspected_gas']}",
-          );
-          return responseData;
+          print("Flask response received: ${response.body}");
+          final result = jsonDecode(response.body) as Map<String, dynamic>;
+          _updateLastValues(temperature, humidity, mq5, mq7);
+          return result;
         } else {
-          throw Exception(
-            'Flask error: Status code ${response.statusCode}, Body: ${response.body}',
+          print(
+            "Flask error: Status code ${response.statusCode}, Body: ${response.body}",
           );
+          retryCount++;
+          if (retryCount < _maxRetries) {
+            await Future.delayed(_retryDelay);
+            continue;
+          }
+          return {'alerts': [], 'danger': false, 'suspected_gas': 'Unknown'};
         }
-      } on http.ClientException catch (e) {
-        print("Network error on attempt ${attempt + 1}: ${e.message}");
-        if (attempt == _maxRetries - 1) {
-          throw Exception(
-            'Network error: Please check server connection and try again',
-          );
+      } catch (e) {
+        print("Error calling Flask (Attempt $retryCount): $e");
+        retryCount++;
+        if (retryCount < _maxRetries) {
+          await Future.delayed(_retryDelay);
+          continue;
         }
-      } on TimeoutException catch (e) {
-        print(
-          "Request timed out on attempt ${attempt + 1} after $_timeoutSeconds seconds",
-        );
-        if (attempt == _maxRetries - 1) {
-          throw Exception(
-            'Server timeout: Please check your network connection',
-          );
-        }
-      } catch (e, stackTrace) {
-        print("Unexpected error on attempt ${attempt + 1}: $e");
-        print("Stack trace: $stackTrace");
-        if (attempt == _maxRetries - 1) {
-          throw Exception('Unexpected error occurred: $e');
-        }
+        return {'alerts': [], 'danger': false, 'suspected_gas': 'Unknown'};
       }
-      attempt++;
-      await Future.delayed(_retryDelay);
     }
-    throw Exception('Failed to connect to server after $_maxRetries attempts');
+    _updateLastValues(temperature, humidity, mq5, mq7);
+    return {'alerts': [], 'danger': false, 'suspected_gas': 'Unknown'};
+  }
+
+  void _updateLastValues(double temperature, double humidity, double mq5, double mq7) {
+    _lastTemperature = temperature;
+    _lastHumidity = humidity;
+    _lastMq5 = mq5;
+    _lastMq7 = mq7;
   }
 }
