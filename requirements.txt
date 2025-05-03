@@ -10,3 +10,6 @@ gunicorn
 firebase-admin
 requests
 flask_cors
+numpy==1.26.4
+flask==3.0.2
+gunicorn==21.2.0
