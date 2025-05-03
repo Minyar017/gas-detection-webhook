@@ -10,4 +10,10 @@ requests
 flask_cors
 numpy==1.26.4
 joblib
+traceback
+os
+LabelEncoder
+pickle
+json
+sklearn
 
