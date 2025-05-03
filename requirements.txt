@@ -9,4 +9,5 @@ firebase-admin
 requests
 flask_cors
 numpy==1.26.4
+joblib
 
