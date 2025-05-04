@@ -6,7 +6,7 @@ import traceback
 import os
 import json
 
-app = Flask(_name_)
+app = Flask(__name__)
 CORS(app)
 
 # Initialize Firebase Realtime Database
@@ -159,6 +159,6 @@ def process_command():
     print(f"Returning response: {response}")
     return jsonify({'fulfillmentText': response}), 200
 
-if _name_ == '_main_':
+if __name__ == '_main_':
     port = int(os.getenv('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
