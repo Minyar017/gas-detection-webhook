@@ -44,7 +44,7 @@ def monitor_sensor_data():
 
             if not all_data:
                 print("ℹ️ No sensor data found.")
-                time.sleep(5)
+                time.sleep(1)
                 continue
 
             # Get last inserted item
