@@ -13,3 +13,7 @@ flask_cors
 werkzeug
 joblib
 numpy
+scikit-learn
+seaborn
+pandas
+matplotlib
