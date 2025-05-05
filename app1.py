@@ -6,10 +6,10 @@ import traceback
 import os
 import json
 
-app = Flask(__name__)
+app = Flask(_name_)
 CORS(app)
 
-# Initialize Firebase Realtime Database
+# Initialisation de Firebase Realtime Database
 try:
     firebase_credentials = os.getenv("FIREBASE_CREDENTIALS")
     if not firebase_credentials:
@@ -21,12 +21,12 @@ try:
         'databaseURL': 'https://projet-fin-d-etude-4632f-default-rtdb.firebaseio.com/'
     })
     db_ref = db.reference('sensor_data')
-    print("Firebase Realtime Database initialized successfully.")
+    print("Firebase Realtime Database initialisé avec succès.")
 except Exception as e:
-    print(f"Failed to initialize Firebase: {str(e)}")
+    print(f"Échec de l'initialisation de Firebase : {str(e)}")
     db_ref = None
 
-# CO danger threshold (in ppm)
+# Seuil de danger pour le CO (en ppm)
 CO_DANGER_THRESHOLD = 400
 
 @app.route('/')
@@ -35,130 +35,114 @@ def home():
 
 @app.route('/process_command', methods=['POST'])
 def process_command():
-    print("Received request at /process_command")
-    print("Request headers:", request.headers)
+    print("Requête reçue sur /process_command")
+
     try:
         data = request.get_json()
         if data is None:
-            print("Invalid JSON payload received.")
             return jsonify({'fulfillmentText': "Erreur: Payload JSON invalide."}), 400
-        print("Request body:", data)
     except Exception as e:
-        print(f"Failed to parse JSON: {str(e)}")
         return jsonify({'fulfillmentText': f"Erreur: Impossible de parser le JSON: {str(e)}"}), 400
 
-    # Check if queryResult and intent are present
     if 'queryResult' not in data or 'intent' not in data['queryResult']:
-        print("Missing queryResult or intent in request body.")
         return jsonify({'fulfillmentText': "Erreur: Requête mal formée, queryResult ou intent manquant."}), 400
 
     intent = data['queryResult']['intent']['displayName']
-    print(f"Processing intent: {intent}")
+    print(f"Intent détectée : {intent}")
 
-    # Handle Default Welcome Intent
-    if intent == 'Default Welcome Intent':
-        response = "Bonjour ! Je suis ici pour vous aider à surveiller les niveaux de CO, température et humidité. Posez-moi une question comme 'Quel est le niveau de CO ?' ou 'Est-ce dangereux ?'."
-        print(f"Returning response: {response}")
+    # Vérification de l'intention 'gpl'
+    if intent == 'gpl':
+        print("Intent 'gpl' reçue et traitée.")
+    
+    # Gestion de l'intention par défaut (bienvenue)
+    if intent == 'Default_Welcome_Intent':
+        response = "Bonjour ! Je suis ici pour vous aider à surveiller les niveaux de CO, GPL, température et humidité. Posez-moi une question comme 'Quel est le niveau de CO ?' ou 'Quel est le niveau de GPL ?'."
         return jsonify({'fulfillmentText': response}), 200
 
-    # For other intents, proceed with Firebase data fetching
+    # Vérification de l'initialisation de Firebase
     if db_ref is None:
-        print("Realtime Database not initialized.")
         return jsonify({'fulfillmentText': "Erreur: Base de données non initialisée."}), 500
 
     try:
-        # Fetch all sensor data entries
         sensor_data_entries = db_ref.get()
         if not sensor_data_entries:
-            print("No data found at 'sensor_data' path.")
             return jsonify({'fulfillmentText': "Désolé, je n'ai pas pu récupérer les données des capteurs."}), 200
 
-        print(f"Full sensor data entries: {sensor_data_entries}")
-
-        # Convert to list of entries with timestamps
+        # Filtrage des données en fonction de l'intention
         entries = []
         for key, value in sensor_data_entries.items():
             if not isinstance(value, dict):
-                print(f"Skipping entry {key}: value is not a dictionary")
                 continue
-            # For 'temp' and 'hum' intents, only require 'temperature' or 'humidity'
-            if intent in ['temp', 'hum']:
-                if 'temperature' in value or 'humidity' in value:
-                    value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
-                    entries.append({'key': key, 'data': value})
-                else:
-                    print(f"Skipping entry {key}: missing required fields for {intent}")
-            # For CO-related intents, require 'mq7'
-            elif intent in ['get_co_level', 'check_danger']:
-                if 'mq7' in value:
-                    value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
-                    entries.append({'key': key, 'data': value})
-                else:
-                    print(f"Skipping entry {key}: missing required field (mq7)")
-            else:
-                print(f"Skipping entry {key}: unrecognized intent {intent}")
+
+            # Collecte des données selon l'intention
+            if intent == 'temp' and 'temperature' in value:
+                value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
+                entries.append({'key': key, 'data': value})
+            elif intent == 'hum' and 'humidity' in value:
+                value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
+                entries.append({'key': key, 'data': value})
+            elif intent in ['get_co_level', 'check_danger'] and 'mq7' in value:
+                value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
+                entries.append({'key': key, 'data': value})
+            elif intent == 'gpl' and 'mq5' in value:  # Prendre la valeur de mq5 pour GPL
+                value['timestamp'] = value.get('timestamp', '1970-01-01T00:00:00Z')
+                entries.append({'key': key, 'data': value})
 
         if not entries:
-            print("No valid entries found with required fields.")
             return jsonify({'fulfillmentText': "Désolé, je n'ai pas pu récupérer les données des capteurs."}), 200
 
-        # Sort by timestamp to get the latest entry
+        # Trier les entrées par date (timestamp)
         entries.sort(key=lambda x: x['data']['timestamp'], reverse=True)
         sensor_data = entries[0]['data']
-        print(f"Latest sensor data: {sensor_data}")
 
-        # For 'temp' and 'hum', if latest entry lacks the required field, search others
+        # Recherche d'une valeur alternative si une donnée est manquante
         if intent == 'temp' and sensor_data.get('temperature') is None:
-            print("Latest entry lacks temperature, searching other entries")
             for entry in entries[1:]:
                 if entry['data'].get('temperature') is not None:
                     sensor_data = entry['data']
-                    print(f"Found temperature in older entry: {sensor_data}")
                     break
         elif intent == 'hum' and sensor_data.get('humidity') is None:
-            print("Latest entry lacks humidity, searching other entries")
             for entry in entries[1:]:
                 if entry['data'].get('humidity') is not None:
                     sensor_data = entry['data']
-                    print(f"Found humidity in older entry: {sensor_data}")
+                    break
+        elif intent == 'gpl' and sensor_data.get('mq5') is None:
+            for entry in entries[1:]:
+                if entry['data'].get('mq5') is not None:
+                    sensor_data = entry['data']
                     break
 
     except Exception as e:
-        print(f"Failed to fetch data from Realtime Database: {str(e)}")
         print(traceback.format_exc())
         return jsonify({'fulfillmentText': f"Erreur: Impossible de récupérer les données: {str(e)}"}), 500
 
-    co_level = sensor_data.get('mq7', 0)
+    # Extraction des données nécessaires
+    co_level = sensor_data.get('mq7')
+    gpl_level = sensor_data.get('mq5')  # Prendre la valeur de mq5 pour GPL
     temperature = sensor_data.get('temperature')
     humidity = sensor_data.get('humidity')
 
-    print(f"CO level (mq7): {co_level}")
-    print(f"Temperature: {temperature}")
-    print(f"Humidity: {humidity}")
-
+    # Création de la réponse en fonction de l'intention
     if intent == 'get_co_level':
-        response = f"Le niveau de CO actuel est de {co_level} ppm."
+        response = f"Le niveau de CO actuel est de {co_level} ppm." if co_level is not None else "Désolé, la valeur de CO n'est pas disponible."
     elif intent == 'check_danger':
-        if co_level > CO_DANGER_THRESHOLD:
+        if co_level is not None and co_level > CO_DANGER_THRESHOLD:
             response = f"Alerte ! Le niveau de CO est de {co_level} ppm, ce qui est dangereux."
-        else:
+        elif co_level is not None:
             response = f"Le niveau de CO est de {co_level} ppm, aucun danger détecté."
+        else:
+            response = "Désolé, la valeur de CO n'est pas disponible pour l'évaluation du danger."
     elif intent == 'temp':
-        if temperature is not None:
-            response = f"La température actuelle est de {temperature}°C."
-        else:
-            response = "Désolé, la température n'est pas disponible pour le moment."
+        response = f"La température actuelle est de {temperature}°C." if temperature is not None else "Désolé, la température n'est pas disponible pour le moment."
     elif intent == 'hum':
-        if humidity is not None:
-            response = f"Le taux d'humidité actuel est de {humidity}%."
-        else:
-            response = "Désolé, l'humidité n'est pas disponible pour le moment."
+        response = f"Le taux d'humidité actuel est de {humidity}%." if humidity is not None else "Désolé, l'humidité n'est pas disponible pour le moment."
+    elif intent == 'gpl':
+        response = f"Le niveau de gaz de pétrole liquéfié (GPL) est de {gpl_level} ppm." if gpl_level is not None else "Désolé, le niveau de GPL n'est pas disponible."
     else:
         response = "Désolé, je n'ai pas compris votre demande."
 
-    print(f"Returning response: {response}")
     return jsonify({'fulfillmentText': response}), 200
 
-if __name__ == '_main_':
+if _name_ == '_main_':
     port = int(os.getenv('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
