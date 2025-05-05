@@ -7,6 +7,8 @@ import numpy as np
 from sklearn.preprocessing import LabelEncoder
 import threading
 import time
+import os
+import json
 
 app = Flask(__name__)
 CORS(app)
@@ -23,47 +25,55 @@ except Exception as e:
     model = None
     le = None
 
-# ----------------- Initialize Firebase -----------------
+# ----------------- Initialize Firebase from ENV -----------------
 try:
-    cred = credentials.Certificate('serviceAccountKey.json')
+    firebase_credentials = os.getenv("FIREBASE_CREDENTIALS")
+    if not firebase_credentials:
+        raise ValueError("FIREBASE_CREDENTIALS environment variable not set")
+
+    cred_dict = json.loads(firebase_credentials)
+    cred = credentials.Certificate(cred_dict)
     firebase_admin.initialize_app(cred, {
-        'databaseURL': 'https://projet-fin-d-etude-4632f-default-rtdb.firebaseio.com/'  # Replace with your project ID
+        'databaseURL': 'https://projet-fin-d-etude-4632f-default-rtdb.firebaseio.com/'
     })
     firestore_db = firestore.client()
-    print("✅ Firebase initialized")
+    db_ref = db.reference('sensor_data')
+    print("✅ Firebase initialized from environment variable")
 except Exception as e:
-    print(f"❌ Error initializing Firebase: {e}")
+    print(f"❌ Error initializing Firebase: {str(e)}")
+    firestore_db = None
+    db_ref = None
 
 # ----------------- Background Prediction Function -----------------
 def monitor_sensor_data():
     last_processed_key = None
     while True:
         try:
-            ref = db.reference('sensor_data')
-            all_data = ref.get()
+            if db_ref is None or firestore_db is None:
+                print("⚠️ Firebase not initialized. Skipping monitoring.")
+                time.sleep(5)
+                continue
 
+            all_data = db_ref.get()
             if not all_data:
                 print("ℹ️ No sensor data found.")
                 time.sleep(1)
                 continue
 
-            # Get last inserted item
             last_key = list(all_data.keys())[-1]
             if last_key == last_processed_key:
                 time.sleep(1)
-                continue  # Skip if same data
+                continue
 
             last_processed_key = last_key
             latest = all_data[last_key]
             print(f"📡 New data received: {latest}")
 
-            # Extract fields safely
             temperature = float(latest.get('temperature', 0))
             humidity = float(latest.get('humidity', 0))
             mq5 = float(latest.get('mq5', 0))
             mq7 = float(latest.get('mq7', 0))
 
-            # Reorder features to match model input
             features = np.array([[humidity, mq5, mq7, temperature]])
             predictions = model.predict(features)[0]
             alert_pred = int(predictions[0])
@@ -84,7 +94,6 @@ def monitor_sensor_data():
                     }
                 }
 
-                # Save to Firestore only if alert == 1
                 firestore_db.collection('alerts').add(alert_data)
                 print(f"🚨 Alert detected and saved to Firestore: {alert_data}")
             else:
@@ -92,7 +101,7 @@ def monitor_sensor_data():
 
         except Exception as e:
             print(f"❌ Error during monitoring: {e}")
-        time.sleep(5)  # Wait before checking again
+        time.sleep(5)
 
 # ----------------- Flask Routes -----------------
 @app.route('/')
