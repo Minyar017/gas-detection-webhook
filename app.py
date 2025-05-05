@@ -50,7 +50,7 @@ def monitor_sensor_data():
             # Get last inserted item
             last_key = list(all_data.keys())[-1]
             if last_key == last_processed_key:
-                time.sleep(5)
+                time.sleep(1)
                 continue  # Skip if same data
 
             last_processed_key = last_key
