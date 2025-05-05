@@ -55,8 +55,7 @@ def process_command():
         print("Intent 'gpl' reçue et traitée.")
     
     # Gestion de l'intention par défaut (bienvenue)
-    if intent == 'Default_Welcome_Intent':
-        response = "Bonjour ! Je suis ici pour vous aider à surveiller les niveaux de CO, GPL, température et humidité. Posez-moi une question comme 'Quel est le niveau de CO ?' ou 'Quel est le niveau de GPL ?'."
+    if intent == 'Default Welcome Intent':
         return jsonify({'fulfillmentText': response}), 200
 
     # Vérification de l'initialisation de Firebase
