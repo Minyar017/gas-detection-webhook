@@ -142,6 +142,6 @@ def process_command():
 
     return jsonify({'fulfillmentText': response}), 200
 
-if _name_ == '__main__':
+if __name__ == '_main_':
     port = int(os.getenv('PORT', 5000))
     app.run(debug=False, host='0.0.0.0', port=port)
