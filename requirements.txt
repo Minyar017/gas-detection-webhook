@@ -11,3 +11,4 @@ firebase-admin
 requests
 flask_cors
 werkzeug
+joblib
