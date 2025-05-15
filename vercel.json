@@ -1,0 +1,14 @@
+{
+    "builds": [
+        {
+            "src": "api/delete_user.py",
+            "use": "@vercel/python"
+        }
+    ],
+    "routes": [
+        {
+            "src": "/api/delete_user",
+            "dest": "api/delete_user.py"
+        }
+    ]
+}
