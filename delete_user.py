@@ -2,7 +2,7 @@ from firebase_admin import initialize_app, auth, firestore
 from flask import Flask, request, jsonify
 import os
 
-# Initialize Firebase Admin with environment variables
+# Initialiser Firebase avec des variables d'environnement
 initialize_app({
     'credential': {
         'type': 'service_account',
@@ -22,8 +22,8 @@ initialize_app({
 app = Flask(__name__)
 
 @app.route('/api/delete_user', methods=['POST'])
-def delete_user_endpoint():
-    # Verify authentication
+def delete_user():
+    # Vérifier le token d'authentification
     auth_header = request.headers.get('Authorization')
     if not auth_header or not auth_header.startswith('Bearer '):
         return jsonify({'error': 'Non autorisé'}), 401
@@ -34,22 +34,23 @@ def delete_user_endpoint():
         db = firestore.client()
         admin_doc = db.collection('admins').document(uid).get()
         if not admin_doc.exists or admin_doc.to_dict().get('role') != 'admin':
-            return jsonify({'error': 'Accès réservé aux admins'}), 403
+            return jsonify({'error': 'Réservé aux admins'}), 403
     except Exception as e:
-        return jsonify({'error': f'Erreur d\'authentification: {str(e)}'}), 401
-    # Get user_id from request
+        return jsonify({'error': f'Erreur auth: {str(e)}'}), 401
+
+    # Obtenir l'user_id
     user_id = request.json.get('user_id')
     if not user_id:
         return jsonify({'error': 'user_id requis'}), 400
+
+    # Supprimer l'utilisateur et ses données
     try:
-        auth.get_user(user_id)
         auth.delete_user(user_id)
         for collection in ['users', 'userLogs', 'admins']:
-            doc_ref = db.collection(collection).document(user_id)
-            if doc_ref.get().exists:
-                doc_ref.delete()
-        return jsonify({'message': f'Utilisateur {user_id} supprimé avec succès'}), 200
-    except auth.UserNotFoundError:
-        return jsonify({'error': f'Utilisateur {user_id} non trouvé'}), 404
+            db.collection(collection).document(user_id).delete()
+        return jsonify({'message': f'Utilisateur {user_id} supprimé'}), 200
     except Exception as e:
         return jsonify({'error': f'Erreur: {str(e)}'}), 500
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)))
