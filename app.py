@@ -18,7 +18,7 @@ try:
     with open('alert_model.pkl', 'rb') as file:
         model = joblib.load(file)
     le = LabelEncoder()
-    le.classes_ = np.array(['CO', 'LPG', 'Smoke', 'Unknown'])
+    le.classes_ = np.array(['CO', 'LPG', 'Smoke', 'Methane' , 'Hydrogen' , 'Alcohol'])
     print("✅ Model and LabelEncoder loaded successfully")
 except Exception as e:
     print(f"❌ Error loading model: {e}")
