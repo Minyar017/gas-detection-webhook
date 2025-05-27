@@ -32,7 +32,7 @@ try:
     le = all_models['label_encoder']
     
     print("✅ Tous les modèles chargés avec succès:")
-    print(f"   - Modèle multi-sortie: {type(multi_output_model)._name_}")
+    print(f"   - Modèle multi-sortie: {type(multi_output_model).__name__}")
     print(f"   - Modèles pour alert: {list(alert_models.keys())}")
     print(f"   - Modèle pour suspected_gas: Naive Bayes")
     print(f"   - Scaler et LabelEncoder chargés")
