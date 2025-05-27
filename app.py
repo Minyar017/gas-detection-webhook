@@ -75,12 +75,8 @@ def monitor_sensor_data():
             mq5 = float(latest.get('mq5', 0))
             mq7 = float(latest.get('mq7', 0))
 
-            # Prepare and scale features
             features = np.array([[humidity, mq5, mq7, temperature]])
-            features_scaled = scaler.transform(features)
-            
-            # Get predictions
-            predictions = model.predict(features_scaled)[0]
+            predictions = model.predict(features)[0]
             alert_pred = int(predictions[0])
 
             if alert_pred == 1:
@@ -111,17 +107,11 @@ def monitor_sensor_data():
 # ----------------- Flask Routes -----------------
 @app.route('/')
 def home():
-    return jsonify({
-        'status': 'active',
-        'model_loaded': model is not None,
-        'firebase_connected': firestore_db is not None
-    })
+    return jsonify({'message': 'Flask server is running. Predictions are processed automatically.'})
 
 # ----------------- Start Background Thread -----------------
-if model and le and scaler:
+if model and le:
     threading.Thread(target=monitor_sensor_data, daemon=True).start()
-else:
-    print("⚠️ Warning: Not starting monitoring thread due to missing components")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5000)
