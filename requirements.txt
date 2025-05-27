@@ -10,7 +10,6 @@ gunicorn
 firebase-admin
 requests
 flask_cors
-werkzeug
 joblib
 numpy
 scikit-learn
