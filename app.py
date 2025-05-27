@@ -16,14 +16,15 @@ CORS(app)
 # ----------------- Load ML Model -----------------
 try:
     with open('alert_model.pkl', 'rb') as file:
-        model = joblib.load(file)
-    le = LabelEncoder()
-    le.classes_ = np.array(['CO', 'LPG', 'Smoke', 'Methane' , 'Hydrogen' , 'Alcohol'])
-    print("✅ Model and LabelEncoder loaded successfully")
+        all_models = joblib.load(file)
+    
+    model = all_models['multi_output_model']
+    scaler = all_models['scaler']
+    le = all_models['label_encoder']
+    print("✅ Model, Scaler, and LabelEncoder loaded successfully")
 except Exception as e:
     print(f"❌ Error loading model: {e}")
-    model = None
-    le = None
+    model = scaler = le = None
 
 # ----------------- Initialize Firebase from ENV -----------------
 try:
@@ -74,8 +75,12 @@ def monitor_sensor_data():
             mq5 = float(latest.get('mq5', 0))
             mq7 = float(latest.get('mq7', 0))
 
+            # Prepare and scale features
             features = np.array([[humidity, mq5, mq7, temperature]])
-            predictions = model.predict(features)[0]
+            features_scaled = scaler.transform(features)
+            
+            # Get predictions
+            predictions = model.predict(features_scaled)[0]
             alert_pred = int(predictions[0])
 
             if alert_pred == 1:
@@ -106,11 +111,17 @@ def monitor_sensor_data():
 # ----------------- Flask Routes -----------------
 @app.route('/')
 def home():
-    return jsonify({'message': 'Flask server is running. Predictions are processed automatically.'})
+    return jsonify({
+        'status': 'active',
+        'model_loaded': model is not None,
+        'firebase_connected': firestore_db is not None
+    })
 
 # ----------------- Start Background Thread -----------------
-if model and le:
+if model and le and scaler:
     threading.Thread(target=monitor_sensor_data, daemon=True).start()
+else:
+    print("⚠️ Warning: Not starting monitoring thread due to missing components")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
