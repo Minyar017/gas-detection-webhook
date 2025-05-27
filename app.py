@@ -16,28 +16,31 @@ CORS(app)
 # ----------------- Load ML Model -----------------
 try:
     with open('alert_model.pkl', 'rb') as file:
-        best_models = joblib.load(file)
+        all_models = joblib.load(file)
     
-    # Charger les meilleurs modèles individuels
-    alert_model = best_models['best_alert_model']
-    gas_model = best_models['best_suspected_gas_model']
+    # Modèle multi-sortie (pour prédictions simultanées)
+    multi_output_model = all_models['multi_output_model']
     
-    # Charger les informations des modèles
-    alert_model_name = best_models['best_alert_model_name']
-    gas_model_name = best_models['best_suspected_gas_model_name']
+    # Modèles spécialisés pour 'alert'
+    alert_models = all_models['classifiers_alert']
     
-    # Charger scaler et label encoder
-    scaler = best_models['scaler']
-    le = best_models['label_encoder']
+    # Modèle Naive Bayes pour 'suspected_gas' uniquement
+    gas_model = all_models['classifiers_suspected_gas']['Naive Bayes']
     
-    print("✅ Meilleurs modèles chargés avec succès:")
-    print(f"   - Modèle Alert: {alert_model_name}")
-    print(f"   - Modèle Gas: {gas_model_name}")
+    # Outils de préprocessing
+    scaler = all_models['scaler']
+    le = all_models['label_encoder']
+    
+    print("✅ Tous les modèles chargés avec succès:")
+    print(f"   - Modèle multi-sortie: {type(multi_output_model).__name__}")
+    print(f"   - Modèles pour alert: {list(alert_models.keys())}")
+    print(f"   - Modèle pour suspected_gas: Naive Bayes")
+    print(f"   - Scaler et LabelEncoder chargés")
     
 except Exception as e:
-    print(f"❌ Erreur lors du chargement des modèles: {e}")
-    alert_model = gas_model = scaler = le = None
-    alert_model_name = gas_model_name = None
+    print(f"❌ Erreur lors du chargement du modèle: {e}")
+    multi_output_model = alert_models = gas_model = scaler = le = None
+
 # ----------------- Initialize Firebase from ENV -----------------
 try:
     firebase_credentials = os.getenv("FIREBASE_CREDENTIALS")
