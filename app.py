@@ -16,16 +16,28 @@ CORS(app)
 # ----------------- Load ML Model -----------------
 try:
     with open('alert_model.pkl', 'rb') as file:
-        all_models = joblib.load(file)
+        best_models = joblib.load(file)
     
-    model = all_models['multi_output_model']
-    scaler = all_models['scaler']
-    le = all_models['label_encoder']
-    print("✅ Model, Scaler, and LabelEncoder loaded successfully")
+    # Charger les meilleurs modèles individuels
+    alert_model = best_models['best_alert_model']
+    gas_model = best_models['best_suspected_gas_model']
+    
+    # Charger les informations des modèles
+    alert_model_name = best_models['best_alert_model_name']
+    gas_model_name = best_models['best_suspected_gas_model_name']
+    
+    # Charger scaler et label encoder
+    scaler = best_models['scaler']
+    le = best_models['label_encoder']
+    
+    print("✅ Meilleurs modèles chargés avec succès:")
+    print(f"   - Modèle Alert: {alert_model_name}")
+    print(f"   - Modèle Gas: {gas_model_name}")
+    
 except Exception as e:
-    print(f"❌ Error loading model: {e}")
-    model = scaler = le = None
-
+    print(f"❌ Erreur lors du chargement des modèles: {e}")
+    alert_model = gas_model = scaler = le = None
+    alert_model_name = gas_model_name = None
 # ----------------- Initialize Firebase from ENV -----------------
 try:
     firebase_credentials = os.getenv("FIREBASE_CREDENTIALS")
