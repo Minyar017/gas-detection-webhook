@@ -60,6 +60,43 @@ except Exception as e:
     firestore_db = None
     db_ref = None
 
+# ----------------- Prediction Functions -----------------
+def predict_with_multi_output(features):
+    """
+    Utilise le modèle multi-sortie pour prédire alert et suspected_gas simultanément
+    """
+    try:
+        features_scaled = scaler.transform(features)
+        predictions = multi_output_model.predict(features_scaled)[0]
+        
+        alert_pred = int(predictions[0])
+        gas_encoded = int(predictions[1])
+        gas_name = le.inverse_transform([gas_encoded])[0]
+        
+        return alert_pred, gas_name
+    except Exception as e:
+        print(f"❌ Erreur lors de la prédiction multi-sortie: {e}")
+        return None, None
+
+def predict_with_specialized_models(features):
+    """
+    Utilise les modèles spécialisés: Logistic Regression pour alert + Naive Bayes pour gas
+    """
+    try:
+        features_scaled = scaler.transform(features)
+        
+        # Prédiction d'alerte avec Logistic Regression (ou autre modèle de votre choix)
+        alert_pred = int(alert_models['Logistic Regression'].predict(features_scaled)[0])
+        
+        # Prédiction de gaz avec Naive Bayes uniquement
+        gas_encoded = int(gas_model.predict(features_scaled)[0])
+        gas_name = le.inverse_transform([gas_encoded])[0]
+        
+        return alert_pred, gas_name
+    except Exception as e:
+        print(f"❌ Erreur lors de la prédiction spécialisée: {e}")
+        return None, None
+
 # ----------------- Background Prediction Function -----------------
 def monitor_sensor_data():
     last_processed_key = None
@@ -67,6 +104,11 @@ def monitor_sensor_data():
         try:
             if db_ref is None or firestore_db is None:
                 print("⚠ Firebase not initialized. Skipping monitoring.")
+                time.sleep(5)
+                continue
+
+            if multi_output_model is None or gas_model is None or scaler is None or le is None:
+                print("⚠ Models not loaded. Skipping monitoring.")
                 time.sleep(5)
                 continue
 
@@ -91,13 +133,20 @@ def monitor_sensor_data():
             mq7 = float(latest.get('mq7', 0))
 
             features = np.array([[humidity, mq5, mq7, temperature]])
-            predictions = model.predict(features)[0]
-            alert_pred = int(predictions[0])
+            
+            # OPTION 1: Utiliser le modèle multi-sortie
+            alert_pred, gas_name = predict_with_multi_output(features)
+            
+            # OPTION 2: Utiliser les modèles spécialisés (commenté)
+            # alert_pred, gas_name = predict_with_specialized_models(features)
+            
+            if alert_pred is None or gas_name is None:
+                print("❌ Erreur lors de la prédiction. Données ignorées.")
+                continue
+
+            print(f"🔮 Prédiction: Alert={alert_pred}, Gas={gas_name}")
 
             if alert_pred == 1:
-                gas_encoded = int(predictions[1])
-                gas_name = le.inverse_transform([gas_encoded])[0]
-
                 alert_data = {
                     'alert': alert_pred,
                     'suspected_gas': gas_name,
@@ -122,11 +171,66 @@ def monitor_sensor_data():
 # ----------------- Flask Routes -----------------
 @app.route('/')
 def home():
-    return jsonify({'message': 'Flask server is running. Predictions are processed automatically.'})
+    return jsonify({
+        'message': 'Flask server is running. Predictions are processed automatically.',
+        'models_loaded': {
+            'multi_output_model': multi_output_model is not None,
+            'alert_models': alert_models is not None,
+            'gas_model': gas_model is not None,
+            'scaler': scaler is not None,
+            'label_encoder': le is not None
+        }
+    })
+
+@app.route('/predict', methods=['POST'])
+def manual_predict():
+    """
+    Route pour tester manuellement les prédictions
+    """
+    try:
+        from flask import request
+        
+        if multi_output_model is None or gas_model is None or scaler is None or le is None:
+            return jsonify({'error': 'Models not loaded'}), 500
+        
+        data = request.get_json()
+        humidity = float(data.get('humidity', 0))
+        mq5 = float(data.get('mq5', 0))
+        mq7 = float(data.get('mq7', 0))
+        temperature = float(data.get('temperature', 0))
+        
+        features = np.array([[humidity, mq5, mq7, temperature]])
+        
+        # Prédictions avec les deux approches
+        alert_multi, gas_multi = predict_with_multi_output(features)
+        alert_spec, gas_spec = predict_with_specialized_models(features)
+        
+        return jsonify({
+            'multi_output_prediction': {
+                'alert': alert_multi,
+                'suspected_gas': gas_multi
+            },
+            'specialized_prediction': {
+                'alert': alert_spec,
+                'suspected_gas': gas_spec
+            },
+            'input_data': {
+                'humidity': humidity,
+                'mq5': mq5,
+                'mq7': mq7,
+                'temperature': temperature
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ----------------- Start Background Thread -----------------
-if model and le:
+if multi_output_model and gas_model and scaler and le:
+    print("🚀 Starting background monitoring thread...")
     threading.Thread(target=monitor_sensor_data, daemon=True).start()
+else:
+    print("❌ Cannot start monitoring: Models not properly loaded")
 
-if __name__ == '_main_':
+if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
